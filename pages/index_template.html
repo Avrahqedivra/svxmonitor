@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html class="__THEME__">
+
+<head>
+	<link rel="icon" type="image/x-icon" href="favicon.ico" />
+	<meta charset="UTF-8">
+	<meta http-equiv="refresh" content="20000"/>
+	<title>SVX Monitor</title>
+	<link rel="stylesheet" href="theme_template.css">
+	<link rel="stylesheet" href="mysite_template.css">
+	<meta name="description" content="Copyright (c) 2023 Jean-Michel Cohen - F4JDN" />
+
+	<style>
+		.tables, #tbtraffic {
+				margin-top: 0;
+				/* position: relative; */
+		}
+
+		#tbtraffic {
+			width: calc(var(--table-width) - 0.5rem);
+		}
+
+		#insertPoint1 {
+				margin-top: 1rem;
+				width: fit-content;
+				scrollbar-width: thin;
+				height: auto;
+				overflow-y: overlay;
+		}
+
+		#insertPoint {
+				margin-top: 0rem;
+				width: var(--table-width);
+				scrollbar-width: thin;
+				height: auto;
+				max-height: 100%;
+				overflow-y: overlay;
+		}
+
+		#insertPoint::-webkit-scrollbar, #insertPoint1::-webkit-scrollbar {
+				display: block;
+				width: 6px;
+				background-color: #404040;
+		}
+
+		#insertPoint::-webkit-scrollbar-thumb, #insertPoint1::-webkit-scrollbar-thumb {
+				background-color: #569cd6;
+		}
+
+		/* .headerRow th {
+			background-color: var(--color-bg-headerRow);
+			position: sticky;
+			top: 0;
+		} */
+
+		@supports (-moz-appearance:none) {
+		#insertPoint1, #insertPoint {
+			scrollbar-color: #569cd6;
+			overflow-y: scroll;
+			width: fit-content;
+		}
+
+		div[name="hbtables"] {
+				overflow-y: clip;
+				margin-top: 0.5rem;
+			}
+		}
+
+		.flagdiv {
+			display: inline-block;
+			vertical-align: middle;
+    	/* margin-top: 0.25rem; */
+    	margin-right: 0.25rem;
+		}
+		.callsigndiv {
+			display: inline-block;
+			vertical-align: middle;
+		}
+	</style>
+</head>
+
+<body>
+	<center>
+		<noscript>You must enable JavaScript</noscript>
+
+		<div id="sitelogo" style="display:none">__SITE_LOGO__</div>
+
+		__BUTTON_BAR__
+
+		<div id="modals">
+			<!-- The Followup -->
+			<div id="followUpModal" class="modal">
+				<!-- Modal content -->
+				<div class="modal-content-followup">
+					<span class="close close-followup">&times;</span>
+					<table class="tablefixed">
+						<thead id="theadFollowUp" tbodyid="followup">
+							<tr class="headerRow">
+								<th class="thledate">Date</th>
+								<th class="thletime">Time</th>
+								<th class="thlename">Name</th>
+								<th class="thlelog">LOG</th>
+							</tr>
+						</thead>
+						<tbody id="followup">
+						</tbody>
+					</table>
+				</div>
+			</div>
+		</div>
+
+		<div id="siteHeader" style="display:none">
+
+			<div name="hbtables" id="hbtables">
+
+				<div id="insertPoint">					
+					<table class="tables tablefixed network" id="tbtraffic">
+						<thead id="theadTraffic" tbodyid="traffic">
+							<tr class="headerRow">
+								<th class="thleorder">State</th>
+								<th class="thledate">Date</th>
+								<th class="thletime" id="hourticker">Heure</th>
+								<th class="thlenode" colspan=2>TX Connectés</th>
+								<th class="thlename">Name</th>
+								<th class="thletg">TG</th>
+								<th class="thledelay">TX (s)</th>
+								<th class="thlelog">TG</th>
+								<th class="thleproto">Protocol</th>
+							</tr>
+						</thead>
+						<tbody id="hblink"></tbody>
+					</table>
+				</div>
+			</div>
+		</div>
+
+		<div id="footer" style="display: none;">
+			__FOOTER__
+		</div> 
+		<!--THIS COPYRIGHT NOTICE MUST BE DISPLAYED AS A CONDITION OF THE LICENCE GRANT FOR THIS SOFTWARE. ALL DERIVATEIVES WORKS MUST CARRY THIS NOTICE -->
+	</center>
+</body>
+
+<script type="text/javascript">
+
+function getQRZImage (callsign, callback) {
+	const no_image_link = "https://s3.amazonaws.com/files.qrz.com/static/qrz/qrz_com200x150.jpg"
+	let cacheItem = urlCache[callsign]
+
+	if (cacheItem != null) {
+		callback(cacheItem)
+	} else {
+		const proxyurl = "http://" + document.location.hostname + ":" + document.location.port + "/";
+		const url = "https://www.qrz.com/lookup/"
+
+		fetch(proxyurl + url + callsign).then((response) => {
+			return response.text()
+		}).then((contents) => {
+			let link = no_image_link
+			let start = contents.indexOf("<td id=\"ppic\"")
+			if (start > 0) {
+				let linkStart = contents.indexOf("src=", start) + 5
+				let linkEnd = contents.indexOf("\"", linkStart)
+				let alink = contents.slice(linkStart, linkEnd)
+				if (alink.startsWith("http") == true) {
+					link = alink
+				} else {
+					console.log("image link not found in response")
+				}
+			};
+
+			urlCache[callsign] = link
+			callback(link)
+
+		}).catch(() => {
+			console.log("Can’t access " + url + " response. Blocked by browser?")
+			urlCache[callsign] = no_image_link
+			callback(no_image_link)
+		})
+	}
+}
+
+function followUpdUser(talker) {
+		$("#followup tr").remove()
+
+		var content = ""
+		var bgClass = ""
+
+		traffic.forEach(om => {
+			if (om.PACKET === 'END' && om.TALKER == talker) {
+				let radioid = JSON.parse(om.RADIOID)
+				let dmrid = radioid['id'] ? radioid['id'] : 'n/a'
+				let fname = radioid['fname'] ? radioid['fname'] : ''
+
+				bgClass = 'tgGreen';
+
+				var alias = ''
+
+				content += "<tr class='" + bgClass + "'>";
+				content += "<td class='tdDate'>" + om.DATE + "</td><td class'tdTime'>" + om.TIME + "</td>"
+				content += "<td class='firstname ellipsis'>" + enhanceNames(fname) + "</td>"
+				content += "<td class='alias ellipsis'>" + alias + "</td></tr>"
+			}
+		})
+
+		getQRZImage(talker, (link) => {
+			$("#followup").append("<tr class='" + "" + "'><td colspan='6' class='fuimg'><a target='_blank' href=https://qrz.com/db/" + talker + "><img style='height: 3rem;width: auto;' src='" + link + "'></a></td></tr>")
+			$("#followup").append(content);
+			$("#followUpModal").show();
+		})
+	}
+
+	function followupcallsign() {
+		var val = $('#search').val();
+		
+		$("#inputModal").hide();
+
+		if (val != "")
+			followUpdUser(val.toUpperCase());
+	}
+
+	function updateTime() {
+		var now = new Date();
+		var hours = now.getHours();
+		var minutes = now.getMinutes();
+		var seconds = now.getSeconds();
+		
+		// Pad single digits with leading zeros
+		hours = (hours < 10 ? "0" : "") + hours;
+		minutes = (minutes < 10 ? "0" : "") + minutes;
+		seconds = (seconds < 10 ? "0" : "") + seconds;
+		
+		var timeString = hours + ":" + minutes + ":" + seconds;
+		
+		document.getElementById("hourticker").textContent = timeString;
+	}
+
+	var displayLines = parseInt("__DISPLAY_LINES__");
+	var traffic = [];
+	var sock = null;
+	
+	roomhilite = new Set("__ROOM_HILITE__".split(','));
+
+	function doTraffic(t) {
+		if (t != null) {
+			if (Array.isArray(t))
+				traffic = t;
+			else
+				traffic.unshift(t);
+
+			let trafficLength = traffic.length;
+
+			if (trafficLength > 0) {
+				var content = "";
+
+				cleaned = true;
+				$("#hblink tr").remove();
+
+			for (let i = 0; i < trafficLength; i++) {
+				var record = traffic[i];
+
+					bgClass = 'tgPurple';
+
+					var callsign = record.CALLSIGN
+					var delay = parseInt(record.DELAY)
+					var alias = ""
+					var radioid = JSON.parse(record.RADIOID)
+					let dmrid = radioid['id'] ? radioid['id'] : 'n/a'
+					
+					var talker = record.TALKER
+
+					if (delay < 2)
+						delay = "PTT";
+
+					var flagUrl = getFlag(talker)
+					if (flagUrl == "")
+						flagUrl = flag64["shield"]
+
+					content = '<tr class=' + bgClass + '>'
+
+					// 🟢 (emoji green circle)
+					// ⚪ (emoji white circle)
+					// 🟠 (emoji orange circle)
+					// 🔴 (emoji red circle)
+					
+					switch(record.ONLINE) {
+						case 0: content += "<td class='tdOrder'>🔴</td>"; break;
+						case 1: content += "<td class='tdOrder'>🟢</td>"; break;
+						case 2: content += "<td class='tdOrder'>🟠</td>"; break;
+						case 3: content += "<td class='tdOrder'>⚪</td>"; break;
+					}
+
+					content += "<td class='tdDate'>" + record.DATE + "</td>"
+					content += "<td class='tdTime'>" + record.TIME + "</td>"
+					content += "<td class='callsign ellipsis'><div class='flagdiv'><img class='tgflag' src='" + flagUrl + "'/></div><div class='callsigndiv'><a target='_blank' href=https://qrz.com/db/" + talker + ">" + callsign + "</a><div></td>"
+					content += "<td dmrid=" + callsign + " class='dmrid'> (" + dmrid + ")</td>"
+					content += "<td class='alink firstname ellipsis' onclick='followUpdUser(`" + talker + "`)'>" + ((radioid && radioid['fname']) ? enhanceNames(radioid['fname']) : '') + "</td>"
+					content += "<td class='thletg'>" + record.TGID + "</td>"
+
+					if (record.PACKET === 'START') {
+						addTicker(record);
+						content += "<td class='online'><div class='ticker" + callsign + "'>00:00</div></td>"
+					}
+					else {
+						deleteTicker(record);
+						content += "<td class='delay'>" + delay + "</td>"
+					}
+
+					content += "<td class='thlelog'>" + record.MONITORING + "</td>"
+					content += "<td class='thleproto'>" + "v"+record.PROTOCOL + "</td>"
+
+					content += "</tr>"
+
+					$("#hblink").append(content);
+				}
+			}
+		}
+	}
+
+	function log(msg) {
+		console.log(msg);
+	}
+
+	function checkDeadTicker() {
+		if (ticker != null) {
+			for(let i=tickerCallsign.length-1; i >= 0; i--) {
+				if (tickerCallsign[i].delay > startTot) {
+					// console.log("deleting dead ticker for callsign " + tickerCallsign[i].callsign);
+					tickerCallsign.splice(i, 1);
+				}
+			}
+		}
+	}
+
+	function deleteTicker(record) {
+		if (ticker != null) {
+			for(let i=0; i<tickerCallsign.length; i++) {
+				if (tickerCallsign[i].callsign == record.CALLSIGN) {
+					// console.log("deleting ticker for callsign " + callsign);
+					tickerCallsign.splice(i, 1);
+					break;
+				}
+			}
+		}
+	}
+
+	function addTicker(record) {
+		if (ticker != null) {
+			// console.log("adding ticker for tg " + record.TGID);
+			var found = false;
+
+			for(let i=0; i<tickerCallsign.length; i++) {
+				if (found = (tickerCallsign[i].callsign == record.CALLSIGN))
+					break;
+			}
+
+			if (!found) {
+				try {
+					var time1 = record.TIME.split(":");
+					var time2 = new Date();
+					var delay = Math.max(0, (time2.getMinutes() * 60 + time2.getSeconds()) - (parseInt(time1[1]) * 60 + parseInt(time1[2])));
+					// console.log("elapsed delay : " + delay)
+					tickerCallsign.push({ "callsign": record.CALLSIGN, "delay": delay });
+				}
+				catch(e) {
+					console.log("xxxx " + record.TIME);
+				}
+			}
+		}
+	}
+
+	$(document).ready(function () {
+		TIME_INTERVALS = 24
+		
+		// document ready occurs before windows.onLoad
+		if (getConfigFromLocalStorage != null) {
+			getConfigFromLocalStorage();
+
+			if (document.documentElement.className != settings[0].config.theme)
+					document.documentElement.className = settings[0].config.theme;
+		}
+
+		document.cookie = "SameSite=None; Secure"
+
+		initMenubar();
+
+		$(document).on("click", ".close", function () {
+			$("#followUpModal").hide();
+		})
+	})
+
+	window.onload = () => {
+		urlCache = {}
+		startTot = parseInt("__START_TOT__"); if (startTot == 0) startTot = 240;
+		bannerDelay = parseInt("__BANNER_DELAY__");
+		mobileDevice = "__MOBILE__" == "true";
+
+		ticker = null;
+		tickerCallsign = [];
+		statusCountdown = 0
+
+		listeners = 0;
+
+		var wsuri = "ws://" + window.location.hostname + ":__SOCKET_SERVER_PORT__?page=dashboard";
+
+		document.getElementById("menuSearch").style.display = "inline-block";		
+
+		if (isNaN(displayLines))
+			displayLines = 10;
+
+		// don't show banner if already done within 3600s
+		if (bannerDelay == 0 || (Math.floor(Date.now() - settings[0].config.last) / 1000) < 3600) {
+			$("#menubar").show();
+			$("#siteHeader").show();
+			$("#footer").show()
+		}
+		else 
+		{
+			$("#sitelogo").show();
+
+			setTimeout(() => {
+				$("#sitelogo").hide()
+
+				$("#menubar").show()
+				$("#siteHeader").show()
+				$("#footer").show()
+
+				// reset settings timer 
+				saveSettings();
+			}, bannerDelay);
+		}
+
+		function WSConnection() {
+			'use strict';
+			this.socket = {};
+		}
+
+		WSConnection.prototype.connect = (url) => {
+			'use strict';
+
+			return new Promise((resolve, reject) => {
+				if ("WebSocket" in window)
+					this.socket = new WebSocket(url);
+				else if ("MozWebSocket" in window)
+					this.socket = new MozWebSocket(url);
+				else {
+					log("Browser does not support WebSocket!");
+					resolve();
+				}
+
+				this.socket.onopen = () => {
+					log("Connected to " + url)
+
+					ticker = setInterval(() => {
+						// Update the time every second
+						updateTime();
+
+						for(let i=0; i<tickerCallsign.length; i++) {
+							tickerCallsign[i].delay++
+
+							var elements = document.getElementsByClassName("ticker" + tickerCallsign[i].callsign)
+							if (elements != null && elements.length > 0) {
+								var value = new Date(tickerCallsign[i].delay * 1000).toISOString().slice(14, 19)
+
+								for(let j=0; j<elements.length; j++) {
+									elements[j].innerHTML = value
+								}
+							}
+						}
+					}, 1000)
+
+					resolve()
+				}
+
+				this.socket.onmessage = (e) => {
+					var data = null;
+
+					try {
+						if (themeSettings == "auto")
+							adjustTheme();
+
+						data = JSON.parse(e.data);
+
+						if (data != null) {
+							if (data.BIGEARS)
+								$("#btnlisteners").text(data.BIGEARS);
+
+							// FIRST PACKET IS CONFIG
+							if (data.CONFIG) {
+								if (data.CONFIG.BIGEARS) {
+									$("#btnlisteners").text(data.CONFIG.BIGEARS);
+								}
+
+								if (data.CONFIG.PACKETS)
+									doTraffic(data.CONFIG.PACKETS.TRAFFIC);
+							} else {
+								if (data.TRAFFIC)
+									doTraffic(data.TRAFFIC);
+
+								if (data.STATUS)
+									log(data.STATUS);
+							}
+					}
+					} catch (error) {
+						log(error);
+					}
+				};
+
+				socket.onerror = function (error) {
+					console.log('WebSocket error: ' + error);
+					reject(error);
+				};
+
+				socket.onclose = function (e) {
+					log("Connection closed (wasClean = " + e.wasClean + ", code = " + e.code + ", reason = '" + e.reason + "')");
+
+					if (ticker != null) {
+						clearInterval(ticker);
+						ticker = null;
+					}
+
+					this.sock = null;
+				};
+			});
+		};
+
+		WSConnection.prototype.disconnect = () => {
+			'use strict';
+			console.log("Disconnect request from local app layer");
+			this.socket.close();
+		};
+
+
+		setTimeout(() => {
+			socket = new WSConnection().connect(wsuri);
+		}, 250);
+	};
+
+	window.onunload = () => {
+		socket = null;
+	}
+</script>
+
+</html>

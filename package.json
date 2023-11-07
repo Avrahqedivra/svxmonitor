@@ -1,0 +1,23 @@
+{
+  "name": "monitor",
+  "version": "1.0.0",
+  "description": "",
+  "main": "monitor.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "F4JDN - Jean-Michel Cohen",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^20.5.9",
+    "@types/ws": "^8.5.5"
+  },
+  "dependencies": {
+    "permessage-deflate": "^0.1.7",
+    "typescript": "^5.2.2",
+    "ws": "^8.14.1"
+  }
+}
