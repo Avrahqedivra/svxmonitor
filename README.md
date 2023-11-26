@@ -1,5 +1,5 @@
 # svxmonitor
-** svxonitor is a NODEJS micro service providing JSON data from SVXLink **
+** svxmonitor is a NODEJS micro service providing JSON data from SVXLink **
     
     - almost not templated, easily editable
     - map location of transmitting OMs
@@ -13,8 +13,8 @@
     must be installed 
     
     cd /opt
-    git clone https://github.com/Avrahqedivra/ndmonitor.git
-    cd ndmonitor
+    git clone https://github.com/Avrahqedivra/svxmonitor.git
+    cd svxmonitor
 
     to install needed packages : 
     
@@ -31,7 +31,7 @@
     
     build the transpiled files with: 
         
-        return to the ndmonitor main folder
+        return to the svxmonitor main folder
 
         npm run build
 
